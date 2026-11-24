@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>XClash Season 2 Map Planner</title>
+  <!-- Load Tailwind CSS for responsive UI layout and styling -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* SVG Tile Hover & Interaction Styling */
+    .map-tile {
+      cursor: pointer;
+      transition: filter 0.12s ease, stroke-width 0.12s ease;
+    }
+
+    .map-tile:hover {
+      filter: brightness(1.07);
+      stroke: #f59e0b;
+      stroke-width: 2.5px;
+    }
+
+    .tile-label {
+      pointer-events: none;
+      font-family: 'Inter', sans-serif;
+      user-select: none;
+    }
+
+    /* Responsive square SVG sizing that fits cleanly inside any desktop, tablet, or mobile viewport */
+    #s2-map {
+      width: 100%;
+      height: 100%;
+      max-width: min(95vw, calc(100dvh - 82px));
+      max-height: min(95vw, calc(100dvh - 82px));
+      aspect-ratio: 1 / 1;
+    }
+
+    /* Warm Desert Dynasty obsidian-bronze backdrop with subtle sandstone dots */
+    .canvas-backdrop {
+      background-color: #1c1611;
+      background-image: radial-gradient(#382c20 1.25px, transparent 1.25px);
+      background-size: 20px 20px;
+    }
+  </style>
+</head>
+<body class="bg-[#1c1611] text-[#f5ebd6] h-dvh flex flex-col overflow-hidden">
+
+  <!-- Top Control Bar -->
+  <header class="bg-[#261e17] border-b border-[#4a3b2c] px-3 sm:px-4 py-2 shadow-md z-20 flex flex-wrap items-center justify-between gap-2">
+    <!-- Title & Subtitle -->
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-lg bg-[#d4a345] text-[#1c1611] font-extrabold flex items-center justify-center shadow-inner text-xs sm:text-sm shrink-0">
+        S2
+      </div>
+      <div>
+        <h1 class="text-sm sm:text-base font-bold tracking-tight text-[#f5ebd6] leading-tight">Desert Dynasty Map Planner</h1>
+        <p class="text-[11px] text-[#c7b396] hidden xl:block">Select faction &amp; status, then click or drag tiles</p>
+      </div>
+    </div>
+
+    <!-- Two Faction Colors × Three States Palette & Erase Tool -->
+    <div class="flex flex-wrap items-center gap-1.5 bg-[#1c1611]/90 p-1 rounded-xl border border-[#4a3b2c]" id="palette-bar">
+      <!-- Palette buttons injected via JS -->
+    </div>
+
+    <!-- Right Action Controls -->
+    <div class="flex items-center gap-1.5 sm:gap-2">
+      <input type="file" id="json-file-input" accept=".json,application/json" class="hidden" />
+      <button id="btn-load-file" title="Import Map Backup (.json)" class="px-2.5 py-1.5 text-xs font-medium bg-[#3b2f23] hover:bg-[#4a3b2c] text-[#f5ebd6] rounded-lg transition flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+        <span class="hidden sm:inline">Upload (JSON)</span>
+      </button>
+
+      <button id="btn-export-png" title="Download Map as PNG & JSON Backup" class="px-2.5 py-1.5 text-xs font-semibold bg-[#d4a345] hover:bg-[#e2b356] text-[#1c1611] rounded-lg transition flex items-center gap-1.5 shadow-sm">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        <span class="hidden sm:inline">Download</span>
+      </button>
+      <button id="btn-clear" title="Clear All Painted Tiles" class="px-2.5 py-1.5 text-xs font-medium bg-[#991b1b] hover:bg-[#b91c1c] text-[#fdf6e7] rounded-lg transition flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+        <span class="hidden sm:inline">Clear Map</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Responsive Map Viewport -->
+  <main id="viewport" class="flex-1 relative overflow-hidden canvas-backdrop flex items-center justify-center p-2 sm:p-3 touch-none">
+    <svg id="s2-map" viewBox="0 0 1040 1040" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" class="shadow-2xl rounded-lg bg-[#e8d5b5] border border-[#4a3b2c] block"></svg>
+  </main>
+
+  <!-- Toast Notification (replaces alert/confirm) -->
+  <div id="toast" class="fixed top-16 left-1/2 -translate-x-1/2 bg-[#261e17] border border-[#d4a345]/70 text-[#f5ebd6] px-4 py-2 rounded-xl shadow-xl text-sm font-medium opacity-0 pointer-events-none transition-opacity duration-200 z-50"></div>
+
+  <!-- Clear Confirmation Modal (replaces confirm()) -->
+  <div id="clear-modal" class="fixed inset-0 bg-[#120e0a]/80 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+    <div class="bg-[#261e17] border border-[#4a3b2c] rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4">
+      <h2 class="text-base font-bold text-[#f5ebd6]">Reset Entire Map?</h2>
+      <p class="text-xs text-[#c7b396] leading-relaxed">This will clear all marked territory colors from both the 13×13 sandstone resource tiles and the 12×12 dynasty building tiles.</p>
+      <div class="flex items-center justify-end gap-2">
+        <button id="cancel-clear" class="px-3 py-1.5 text-xs font-medium bg-[#3b2f23] hover:bg-[#4a3b2c] text-[#f5ebd6] rounded-lg transition">Cancel</button>
+        <button id="confirm-clear" class="px-3 py-1.5 text-xs font-medium bg-[#991b1b] hover:bg-[#b91c1c] text-[#fdf6e7] rounded-lg transition">Yes, Clear All</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * Season 2: Desert Dynasty Tactical Map Planner
+     * Architecture:
+     * 1. Layer 1 (Bottom): 13x13 grid of sunlit desert sandstone base tiles (centered pure numbers 1 -> 7).
+     * 2. Layer 2 (Middle): Full 12x12 grid of offset building tiles (+0.5 tile X and +0.5 tile Y),
+     *    including all four LV. 6 Metropolis buildings at (5,5), (5,6), (6,5), (6,6) and the offset Trade Center cross.
+     * 3. Layer 3 (Top Capstone): Single 1x1 Royal Dynasty Gold LV. 7 Metropolis centered at (6*S, 6*S) overlapping the center cross.
+     */
+
+    const SVG_NS = "http://www.w3.org/2000/svg";
+    const TILE_SIZE = 80; // Logical coordinate size per tile (13 * 80 = 1040)
+    const GRID_BASE_COUNT = 13;
+    const GRID_BLDG_COUNT = 12;
+    const MAP_PIXEL_SIZE = GRID_BASE_COUNT * TILE_SIZE; // 1040 x 1040
+
+    // Desert Dynasty default map colors
+    const DEFAULT_COLORS = {
+      // Subtle sunlit sandstone warmth from outer dunes (Lv.1) toward the oasis core (Lv.7)
+      baseRings: {
+        1: "#ede0c7",
+        2: "#ebdcc0",
+        3: "#e8d7b8",
+        4: "#e6d2b0",
+        5: "#e3cda8",
+        6: "#e0c8a0",
+        7: "#ddc397"
+      },
+      baseStroke: "#4a3b2c",
+      baseText: "#3b2a1a",
+
+      building: "#7a634b",      // Weathered sandstone / desert stone
+      buildingStroke: "#3b2a1a",
+      buildingText: "#fdf6e7",  // Warm ivory
+
+      tradeCenter: "#3b6968",   // Rich oasis teal-turquoise
+      tradeStroke: "#234241",
+      tradeText: "#fdf6e7",     // Warm ivory
+
+      metropolis7: "#eab308",   // Royal dynasty gold
+      metroStroke: "#4a3b2c",
+      metroText: "#3b2a1a"      // Deep bronze-brown
+    };
+
+    // Two faction colors
+    const FACTIONS = {
+      cobalt:  { id: "cobalt",  name: "ZSW", hex: "#2563eb", text: "#fdf6e7" },
+      crimson: { id: "crimson", name: "VRW",  hex: "#dc2626", text: "#fdf6e7" }
+    };
+
+    // Three tactical states per faction color
+    const STATES = {
+      occupied: {
+        id: "occupied",
+        label: "Occupied",
+        symbolId: "#icon-state-occupied",
+        btnSvg: `<svg class="w-3.5 h-3.5 shrink-0" viewBox="-14 -14 28 28" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M 0 -11 L 9 -7 L 9 1 C 9 7 4.5 10.5 0 12 C -4.5 10.5 -9 7 -9 1 L -9 -7 Z" fill="currentColor" fill-opacity="0.25"/><path d="M -4 0.5 L -1 3.5 L 4.5 -2.5"/></svg>`
+      },
+      to_occupy: {
+        id: "to_occupy",
+        label: "To Be Occupied",
+        symbolId: "#icon-state-target",
+        btnSvg: `<svg class="w-3.5 h-3.5 shrink-0" viewBox="-14 -14 28 28" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><circle cx="0" cy="0" r="8"/><circle cx="0" cy="0" r="2.5" fill="currentColor"/><path d="M 0 -12 L 0 -8 M 0 8 L 0 12 M -12 0 L -8 0 M 8 0 L 12 0"/></svg>`
+      },
+      abandoned: {
+        id: "abandoned",
+        label: "Abandoned",
+        symbolId: "#icon-state-abandoned",
+        btnSvg: `<svg class="w-3.5 h-3.5 shrink-0" viewBox="-14 -14 28 28" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="0" cy="0" r="9.5" stroke-opacity="0.55"/><path d="M -5 -5 L 5 5 M 5 -5 L -5 5"/></svg>`
+      }
+    };
+
+    // Application State: { color: "crimson" | "cobalt", state: "occupied" | "to_occupy" | "abandoned" } | "erase"
+    let activeBrush = { color: "cobalt", state: "occupied" };
+    const tileRegistry = new Map(); // tileId -> { id, layer, r, c, label, cx, cy, iconScale, defaultFill, defaultTextFill, defaultInnerHTML, assigned, rectEl, contentGroup }
+
+    // Drag-painting State
+    let isPainting = false;
+    let paintActionValue = null; // null (erase) or { color, state }
+
+    // DOM References
+    const svg = document.getElementById("s2-map");
+    const paletteBar = document.getElementById("palette-bar");
+    const toastEl = document.getElementById("toast");
+
+    // Helper: Create SVG element with attributes
+    function createSvgEl(tag, attrs = {}) {
+      const el = document.createElementNS(SVG_NS, tag);
+      for (const [k, v] of Object.entries(attrs)) {
+        el.setAttribute(k, v);
+      }
+      return el;
+    }
+
+    // Helper: Show subtle toast notification
+    let toastTimer = null;
+    function showToast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.remove("opacity-0");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toastEl.classList.add("opacity-0");
+      }, 2200);
+    }
+
+    /**
+     * Define reusable crisp vector icons in <defs> for default buildings and the 3 tactical states
+     */
+    function injectSvgDefs() {
+      const defs = createSvgEl("defs");
+
+      // 1. Default Building / House Outline Icon (centered around 0,0)
+      const houseSymbol = createSvgEl("g", { id: "icon-house" });
+      houseSymbol.appendChild(createSvgEl("path", {
+        d: "M -11 1 L 0 -10 L 11 1 M -8 -2 L -8 10 L 8 10 L 8 -2",
+        fill: "none",
+        stroke: "currentColor",
+        "stroke-width": "2.4",
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round"
+      }));
+
+      // 2. Default Trade Center Balance Scale Icon (centered around 0,0)
+      const tradeSymbol = createSvgEl("g", { id: "icon-trade" });
+      tradeSymbol.appendChild(createSvgEl("path", {
+        d: "M 0 -12 L 0 11 M -7 11 L 7 11 M -11 -7 L 11 -7",
+        fill: "none",
+        stroke: "currentColor",
+        "stroke-width": "2.3",
+        "stroke-linecap": "round"
+      }));
+      tradeSymbol.appendChild(createSvgEl("path", {
+        d: "M -11 -7 L -15 2 L -7 2 Z M 11 -7 L 7 2 L 15 2 Z",
+        fill: "currentColor",
+        stroke: "currentColor",
+        "stroke-width": "1.2",
+        "stroke-linejoin": "round"
+      }));
+
+      // 3. Default LV.7 Metropolis Crown Icon (centered around 0,0)
+      const crownSymbol = createSvgEl("g", { id: "icon-crown" });
+      crownSymbol.appendChild(createSvgEl("path", {
+        d: "M -15 9 L -17 -6 L -7.5 2 L 0 -10 L 7.5 2 L 17 -6 L 15 9 Z M -15 13 L 15 13",
+        fill: "currentColor",
+        stroke: "currentColor",
+        "stroke-width": "2",
+        "stroke-linejoin": "round",
+        "stroke-linecap": "round"
+      }));
+
+      // 4. State Icon: OCCUPIED (Shield with Checkmark, centered around 0,0)
+      const occupiedSymbol = createSvgEl("g", { id: "icon-state-occupied" });
+      occupiedSymbol.appendChild(createSvgEl("path", {
+        d: "M 0 -13 L 11 -8.5 L 11 1.5 C 11 8.5 5.5 12.5 0 14.5 C -5.5 12.5 -11 8.5 -11 1.5 L -11 -8.5 Z",
+        fill: "currentColor",
+        "fill-opacity": "0.22",
+        stroke: "currentColor",
+        "stroke-width": "2.4",
+        "stroke-linejoin": "round"
+      }));
+      occupiedSymbol.appendChild(createSvgEl("path", {
+        d: "M -5 0.5 L -1.2 4.5 L 5.5 -3.5",
+        fill: "none",
+        stroke: "currentColor",
+        "stroke-width": "2.8",
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round"
+      }));
+
+      // 5. State Icon: TO BE OCCUPIED (Crosshair Target, centered around 0,0)
+      const targetSymbol = createSvgEl("g", { id: "icon-state-target" });
+      targetSymbol.appendChild(createSvgEl("circle", {
+        cx: "0",
+        cy: "0",
+        r: "9.5",
+        fill: "none",
+        stroke: "currentColor",
+        "stroke-width": "2.4"
+      }));
+      targetSymbol.appendChild(createSvgEl("circle", {
+        cx: "0",
+        cy: "0",
+        r: "3",
+        fill: "currentColor"
+      }));
+      targetSymbol.appendChild(createSvgEl("path", {
+        d: "M 0 -14 L 0 -9.5 M 0 9.5 L 0 14 M -14 0 L -9.5 0 M 9.5 0 L 14 0",
+        fill: "none",
+        stroke: "currentColor",
+        "stroke-width": "2.4",
+        "stroke-linecap": "round"
+      }));
+
+      // 6. State Icon: ABANDONED (Crossed-out / X-Mark Emblem, centered around 0,0)
+      const abandonedSymbol = createSvgEl("g", { id: "icon-state-abandoned" });
+      abandonedSymbol.appendChild(createSvgEl("circle", {
+        cx: "0",
+        cy: "0",
+        r: "11.5",
+        fill: "none",
+        stroke: "currentColor",
+        "stroke-width": "2",
+        "stroke-dasharray": "4 3"
+      }));
+      abandonedSymbol.appendChild(createSvgEl("path", {
+        d: "M -6 -6 L 6 6 M 6 -6 L -6 6",
+        fill: "none",
+        stroke: "currentColor",
+        "stroke-width": "3",
+        "stroke-linecap": "round"
+      }));
+
+      defs.appendChild(houseSymbol);
+      defs.appendChild(tradeSymbol);
+      defs.appendChild(crownSymbol);
+      defs.appendChild(occupiedSymbol);
+      defs.appendChild(targetSymbol);
+      defs.appendChild(abandonedSymbol);
+      svg.appendChild(defs);
+    }
+
+    /**
+     * Determine building metadata for the 12x12 building grid (0..11)
+     * Matches the exact Season 2 asymmetric cross of Trade Centers meeting the 4 LV.6 Metropolis corners:
+     * - Top branch:    c = 6, r = 0..4 (directly above top-right LV.6 at r=5, c=6)
+     * - Bottom branch: c = 6, r = 7..11 (directly below bottom-right LV.6 at r=6, c=6)
+     * - Left branch:   r = 5, c = 0..4 (directly left of top-left LV.6 at r=5, c=5)
+     * - Right branch:  r = 6, c = 7..11 (directly right of bottom-right LV.6 at r=6, c=6)
+     */
+    function getBuildingInfo(r, c) {
+      const isTradeCenter =
+        (c === 6 && r >= 0 && r <= 4) ||
+        (c === 5 && r >= 7 && r <= 11) ||
+        (r === 5 && c >= 0 && c <= 4) ||
+        (r === 6 && c >= 7 && c <= 11);
+
+      if (isTradeCenter) {
+        return {
+          type: "trade",
+          lv: null,
+          fullLabel: "Trade Center"
+        };
+      }
+
+      // Concentric ring level (1 on outer ring -> 6 on the 4 center tiles (5,5), (5,6), (6,5), (6,6))
+      const lv = Math.min(r, c, 11 - r, 11 - c) + 1;
+      const ringNames = {
+        1: "LV.1 Village",
+        2: "LV.2 Mine",
+        3: "LV.3 Manor",
+        4: "LV.4 Factory",
+        5: "LV.5 Town",
+        6: "LV.6 Metropolis"
+      };
+
+      return {
+        type: "building",
+        lv,
+        fullLabel: ringNames[lv]
+      };
+    }
+
+    /**
+     * Build the complete responsive SVG map:
+     * 1. 13x13 sandstone resource tiles
+     * 2. Full 12x12 offset building tiles (including all four LV. 6 Metropolis buildings around the center)
+     * 3. Single 1x1 LV. 7 Metropolis tile centered directly on top of the center intersection
+     */
+    function buildMap() {
+      svg.setAttribute("viewBox", `0 0 ${MAP_PIXEL_SIZE} ${MAP_PIXEL_SIZE}`);
+      svg.innerHTML = "";
+      tileRegistry.clear();
+      injectSvgDefs();
+
+      // 1. LAYER 1: 13x13 Sunlit Desert Sandstone Base Tiles (Strictly Centered Pure Numbers 1 - 7)
+      for (let r = 0; r < GRID_BASE_COUNT; r++) {
+        for (let c = 0; c < GRID_BASE_COUNT; c++) {
+          // Skip center tile (6, 6) so there is no base tile underneath the LV. 7 Metropolis
+          if (r === 6 && c === 6) continue;
+
+          const x = c * TILE_SIZE;
+          const y = r * TILE_SIZE;
+          const cx = x + TILE_SIZE / 2;
+          const cy = y + TILE_SIZE / 2;
+          const lv = Math.min(r, c, 12 - r, 12 - c) + 1;
+          const id = `base_${r}_${c}`;
+          const ringFill = DEFAULT_COLORS.baseRings[lv] || DEFAULT_COLORS.baseRings[1];
+
+          const rect = createSvgEl("rect", {
+            x,
+            y,
+            width: TILE_SIZE,
+            height: TILE_SIZE,
+            fill: ringFill,
+            stroke: DEFAULT_COLORS.baseStroke,
+            "stroke-width": 1.2,
+            class: "map-tile",
+            "data-id": id
+          });
+
+          const contentGroup = createSvgEl("g", {
+            class: "tile-label",
+            style: `color: ${DEFAULT_COLORS.baseText};`
+          });
+
+          const text = createSvgEl("text", {
+            x: cx,
+            y: cy,
+            "text-anchor": "middle",
+            "dominant-baseline": "central",
+            fill: "currentColor",
+            "font-size": "18px",
+            "font-weight": "800"
+          });
+          text.textContent = `${lv}`;
+          contentGroup.appendChild(text);
+
+          svg.appendChild(rect);
+          svg.appendChild(contentGroup);
+
+          tileRegistry.set(id, {
+            id,
+            layer: "Sandstone Tile",
+            r: r + 1,
+            c: c + 1,
+            label: `Resource Lv. ${lv}`,
+            cx,
+            cy,
+            iconScale: 1.15,
+            defaultFill: ringFill,
+            defaultTextFill: DEFAULT_COLORS.baseText,
+            defaultInnerHTML: contentGroup.innerHTML,
+            assigned: null,
+            rectEl: rect,
+            contentGroup
+          });
+        }
+      }
+
+      // 2. LAYER 2: Single 1x1 Royal Dynasty Gold "LV. 7 Metropolis" centered on top of the 4 LV.6 Metropolis corners
+      const metroSize = TILE_SIZE; // 60x60 centered at (6.5 * TILE_SIZE, 6.5 * TILE_SIZE) = (520, 520)
+      const metroCx = MAP_PIXEL_SIZE / 2; // 520
+      const metroCy = MAP_PIXEL_SIZE / 2; // 520
+      const metroX = metroCx - metroSize / 2;
+      const metroY = metroCy - metroSize / 2;
+      const metroId = "bldg_center_metro7";
+
+      const metroRect = createSvgEl("rect", {
+        x: metroX,
+        y: metroY,
+        width: metroSize,
+        height: metroSize,
+        rx: 8,
+        fill: DEFAULT_COLORS.metropolis7,
+        stroke: DEFAULT_COLORS.metroStroke,
+        "stroke-width": 2.2,
+        class: "map-tile",
+        "data-id": metroId
+      });
+
+      const metroGroup = createSvgEl("g", {
+        class: "tile-label",
+        style: `color: ${DEFAULT_COLORS.metroText};`
+      });
+
+      const crownUse = createSvgEl("use", {
+        href: "#icon-crown",
+        transform: `translate(${metroCx}, ${metroCy - 9}) scale(0.95)`
+      });
+
+      const metroNum = createSvgEl("text", {
+        x: metroCx,
+        y: metroCy + 14,
+        "text-anchor": "middle",
+        "dominant-baseline": "central",
+        fill: "currentColor",
+        "font-size": "17px",
+        "font-weight": "900"
+      });
+      metroNum.textContent = "7";
+
+      metroGroup.appendChild(crownUse);
+      metroGroup.appendChild(metroNum);
+
+      svg.appendChild(metroRect);
+      svg.appendChild(metroGroup);
+
+      tileRegistry.set(metroId, {
+        id: metroId,
+        layer: "Dynasty Capital",
+        r: 6,
+        c: 6,
+        label: "LV. 7 Metropolis",
+        cx: metroCx,
+        cy: metroCy,
+        iconScale: 1.25,
+        defaultFill: DEFAULT_COLORS.metropolis7,
+        defaultTextFill: DEFAULT_COLORS.metroText,
+        defaultInnerHTML: metroGroup.innerHTML,
+        assigned: null,
+        rectEl: metroRect,
+        contentGroup: metroGroup
+      });
+
+      // 3. LAYER 3: Full 12x12 Offset Building Tiles (including all 4 LV. 6 Metropolis tiles at r=5..6, c=5..6)
+      const halfTile = TILE_SIZE / 2;
+      const bldgSize = TILE_SIZE - 26; // 54x54 square so centered 13x13 numbers remain cleanly visible
+      const bldgInset = (TILE_SIZE - bldgSize) / 2;
+
+      for (let r = 0; r < GRID_BLDG_COUNT; r++) {
+        for (let c = 0; c < GRID_BLDG_COUNT; c++) {
+          const cellX = c * TILE_SIZE + halfTile;
+          const cellY = r * TILE_SIZE + halfTile;
+          const x = cellX + bldgInset;
+          const y = cellY + bldgInset;
+          const cx = cellX + halfTile; // Exact tile center X
+          const cy = cellY + halfTile; // Exact tile center Y
+
+          const id = `bldg_${r}_${c}`;
+          const info = getBuildingInfo(r, c);
+          const isTrade = info.type === "trade";
+
+          const fillCol = isTrade ? DEFAULT_COLORS.tradeCenter : DEFAULT_COLORS.building;
+          const strokeCol = isTrade ? DEFAULT_COLORS.tradeStroke : DEFAULT_COLORS.buildingStroke;
+          const textCol = isTrade ? DEFAULT_COLORS.tradeText : DEFAULT_COLORS.buildingText;
+
+          const rect = createSvgEl("rect", {
+            x,
+            y,
+            width: bldgSize,
+            height: bldgSize,
+            rx: 6,
+            fill: fillCol,
+            stroke: strokeCol,
+            "stroke-width": 1.5,
+            class: "map-tile",
+            "data-id": id
+          });
+
+          const contentGroup = createSvgEl("g", {
+            class: "tile-label",
+            style: `color: ${textCol};`
+          });
+
+          if (isTrade) {
+            const iconUse = createSvgEl("use", {
+              href: "#icon-trade",
+              transform: `translate(${cx}, ${cy}) scale(1.12)`
+            });
+            contentGroup.appendChild(iconUse);
+          } else {
+            const iconUse = createSvgEl("use", {
+              href: "#icon-house",
+              transform: `translate(${cx}, ${cy - 8}) scale(0.92)`
+            });
+
+            const numText = createSvgEl("text", {
+              x: cx,
+              y: cy + 13,
+              "text-anchor": "middle",
+              "dominant-baseline": "central",
+              fill: "currentColor",
+              "font-size": "15px",
+              "font-weight": "800"
+            });
+            numText.textContent = `${info.lv}`;
+
+            contentGroup.appendChild(iconUse);
+            contentGroup.appendChild(numText);
+          }
+
+          svg.appendChild(rect);
+          svg.appendChild(contentGroup);
+
+          tileRegistry.set(id, {
+            id,
+            layer: isTrade ? "Trade Hub" : "Citadel",
+            r: r + 1,
+            c: c + 1,
+            label: info.fullLabel,
+            cx,
+            cy,
+            iconScale: 1.15,
+            defaultFill: fillCol,
+            defaultTextFill: textCol,
+            defaultInnerHTML: contentGroup.innerHTML,
+            assigned: null,
+            rectEl: rect,
+            contentGroup
+          });
+        }
+      }
+    }
+
+    /**
+     * Render the Two-Faction × Three-State Toolbar + Erase Button
+     */
+    function renderPalette() {
+      paletteBar.innerHTML = "";
+
+      Object.values(FACTIONS).forEach((faction, idx) => {
+        const groupWrap = document.createElement("div");
+        groupWrap.className = "flex items-center gap-1";
+
+        // Faction color dot label
+        const badge = document.createElement("span");
+        badge.className = "px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-[#f5ebd6] flex items-center gap-1";
+        badge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full border border-black/40" style="background:${faction.hex}"></span><span class="hidden sm:inline">${faction.name}</span>`;
+        groupWrap.appendChild(badge);
+
+        Object.values(STATES).forEach((st) => {
+          const isActive =
+            activeBrush !== "erase" &&
+            activeBrush.color === faction.id &&
+            activeBrush.state === st.id;
+
+          const btn = document.createElement("button");
+          btn.className = `px-2 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition border ${
+            isActive
+              ? "border-[#d4a345] bg-[#3b2f23] text-[#f5ebd6] shadow-sm ring-1 ring-[#d4a345]/50"
+              : "border-transparent text-[#c7b396] hover:bg-[#261e17] hover:text-[#f5ebd6]"
+          }`;
+          btn.title = `${faction.name} — ${st.label}`;
+
+          const iconWrap = document.createElement("span");
+          iconWrap.style.color = isActive ? faction.hex : "currentColor";
+          iconWrap.innerHTML = st.btnSvg;
+
+          const textSpan = document.createElement("span");
+          textSpan.textContent = st.label;
+
+          btn.appendChild(iconWrap);
+          btn.appendChild(textSpan);
+
+          btn.addEventListener("click", () => {
+            activeBrush = { color: faction.id, state: st.id };
+            renderPalette();
+          });
+
+          groupWrap.appendChild(btn);
+        });
+
+        paletteBar.appendChild(groupWrap);
+
+        // Divider between Red group, Blue group, and Erase button
+        const divider = document.createElement("div");
+        divider.className = "w-px h-5 bg-[#4a3b2c] mx-0.5";
+        paletteBar.appendChild(divider);
+      });
+
+      // Erase button
+      const isEraseActive = activeBrush === "erase";
+      const eraseBtn = document.createElement("button");
+      eraseBtn.className = `px-2.5 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition border ${
+        isEraseActive
+          ? "border-[#d4a345] bg-[#3b2f23] text-[#f5ebd6] shadow-sm"
+          : "border-transparent text-[#c7b396] hover:bg-[#261e17] hover:text-[#f5ebd6]"
+      }`;
+      eraseBtn.title = "Restore tile to original Desert Dynasty appearance";
+      eraseBtn.innerHTML = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" d="M18 6L6 18M6 6l12 12"/></svg><span>Erase</span>`;
+
+      eraseBtn.addEventListener("click", () => {
+        activeBrush = "erase";
+        renderPalette();
+      });
+
+      paletteBar.appendChild(eraseBtn);
+    }
+
+    /**
+     * Toggle or apply the active (color, state) brush on click
+     */
+    function applyBrushToTile(tileId) {
+      const tile = tileRegistry.get(tileId);
+      if (!tile) return;
+
+      let nextAssignment = null;
+      if (activeBrush !== "erase") {
+        const isSameAssignment =
+          tile.assigned &&
+          tile.assigned.color === activeBrush.color &&
+          tile.assigned.state === activeBrush.state;
+
+        // Clicking an already-identical tile toggles it back to default; otherwise applies new color + state icon
+        nextAssignment = isSameAssignment
+          ? null
+          : { color: activeBrush.color, state: activeBrush.state };
+      }
+
+      setTileState(tile, nextAssignment);
+    }
+
+    /**
+     * Update both the tile background color and its centered innerHTML icon
+     */
+    function setTileState(tile, assignment) {
+      tile.assigned = assignment;
+
+      if (!assignment || !FACTIONS[assignment.color] || !STATES[assignment.state]) {
+        tile.assigned = null;
+        tile.rectEl.setAttribute("fill", tile.defaultFill);
+        tile.contentGroup.style.color = tile.defaultTextFill;
+        tile.contentGroup.innerHTML = tile.defaultInnerHTML;
+        return;
+      }
+
+      const faction = FACTIONS[assignment.color];
+      const stateMeta = STATES[assignment.state];
+
+      tile.rectEl.setAttribute("fill", faction.hex);
+      tile.contentGroup.style.color = faction.text;
+      tile.contentGroup.innerHTML = `<use href="${stateMeta.symbolId}" transform="translate(${tile.cx}, ${tile.cy}) scale(${tile.iconScale})"></use>`;
+    }
+
+    // Unified Pointer Events for Desktop Mouse & Mobile/Tablet Touch Drag-Painting
+    svg.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0 && e.pointerType === "mouse") return;
+      const rect = e.target.closest(".map-tile");
+      if (!rect) return;
+
+      // Release implicit touch capture so elementFromPoint detects neighboring tiles while dragging
+      if (e.target.hasPointerCapture && e.target.hasPointerCapture(e.pointerId)) {
+        e.target.releasePointerCapture(e.pointerId);
+      }
+
+      const tileId = rect.dataset.id;
+      applyBrushToTile(tileId);
+
+      const updatedTile = tileRegistry.get(tileId);
+      isPainting = true;
+      paintActionValue = updatedTile && updatedTile.assigned ? { ...updatedTile.assigned } : null;
+    });
+
+    svg.addEventListener("pointermove", (e) => {
+      if (!isPainting) return;
+      const hitEl = document.elementFromPoint(e.clientX, e.clientY);
+      const rect = hitEl ? hitEl.closest(".map-tile") : null;
+      if (!rect) return;
+
+      const tile = tileRegistry.get(rect.dataset.id);
+      if (!tile) return;
+
+      const alreadyMatches =
+        (!paintActionValue && !tile.assigned) ||
+        (paintActionValue &&
+          tile.assigned &&
+          tile.assigned.color === paintActionValue.color &&
+          tile.assigned.state === paintActionValue.state);
+
+      if (!alreadyMatches) {
+        setTileState(tile, paintActionValue ? { ...paintActionValue } : null);
+      }
+    });
+
+    window.addEventListener("pointerup", () => {
+      isPainting = false;
+    });
+    window.addEventListener("pointercancel", () => {
+      isPainting = false;
+    });
+
+    // Clear All Modal Logic
+    const clearModal = document.getElementById("clear-modal");
+    document.getElementById("btn-clear").addEventListener("click", () => {
+      clearModal.classList.remove("hidden");
+      clearModal.classList.add("flex");
+    });
+    document.getElementById("cancel-clear").addEventListener("click", () => {
+      clearModal.classList.add("hidden");
+      clearModal.classList.remove("flex");
+    });
+    document.getElementById("confirm-clear").addEventListener("click", () => {
+      tileRegistry.forEach((tile) => setTileState(tile, null));
+      clearModal.classList.add("hidden");
+      clearModal.classList.remove("flex");
+      showToast("All tiles cleared");
+    });
+
+    // Import JSON File Logic
+    const jsonFileInput = document.getElementById("json-file-input");
+
+    function getMapStateJsonString() {
+      const exported = {};
+      tileRegistry.forEach((tile, id) => {
+        if (tile.assigned) exported[id] = tile.assigned;
+      });
+      return JSON.stringify(exported, null, 2);
+    }
+
+    function applyParsedMapState(parsed) {
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("Invalid map state structure");
+      }
+      tileRegistry.forEach((tile, id) => {
+        const entry = parsed[id];
+        if (entry && typeof entry === "object" && entry.color && entry.state) {
+          setTileState(tile, entry);
+        } else if (typeof entry === "string" && FACTIONS[entry]) {
+          // Backward compatibility with simple color-only JSON saves
+          setTileState(tile, { color: entry, state: "occupied" });
+        } else {
+          setTileState(tile, null);
+        }
+      });
+    }
+
+    function getFormattedTimestamp() {
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    }
+
+    function triggerDownload(href, filename) {
+      const downloadLink = document.createElement("a");
+      downloadLink.href = href;
+      downloadLink.download = filename;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+    }
+
+    document.getElementById("btn-load-file").addEventListener("click", () => {
+      jsonFileInput.value = "";
+      jsonFileInput.click();
+    });
+
+    jsonFileInput.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const parsed = JSON.parse(event.target.result || "{}");
+          applyParsedMapState(parsed);
+          showToast(`Loaded "${file.name}" successfully!`);
+        } catch (err) {
+          showToast("Invalid JSON file — could not load map.");
+        }
+      };
+      reader.onerror = () => {
+        showToast("Failed to read the selected file.");
+      };
+      reader.readAsText(file);
+    });
+
+    // Export High-Res PNG Image + JSON Backup using unified name+timestamp format
+    document.getElementById("btn-export-png").addEventListener("click", () => {
+      const baseFilename = `season2-desert-dynasty-map_${getFormattedTimestamp()}`;
+
+      // 1. Download JSON state file
+      const jsonString = getMapStateJsonString();
+      const jsonBlob = new Blob([jsonString], { type: "application/json;charset=utf-8" });
+      const jsonUrl = URL.createObjectURL(jsonBlob);
+      triggerDownload(jsonUrl, `${baseFilename}.json`);
+      setTimeout(() => URL.revokeObjectURL(jsonUrl), 1000);
+
+      // 2. Render & Download PNG snapshot
+      const clonedSvg = svg.cloneNode(true);
+      clonedSvg.setAttribute("width", "2080");
+      clonedSvg.setAttribute("height", "2080");
+
+      const serializer = new XMLSerializer();
+      const svgString = serializer.serializeToString(clonedSvg);
+      const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(svgBlob);
+
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 2080;
+        canvas.height = 2080;
+        const ctx = canvas.getContext("2d");
+
+        ctx.fillStyle = "#e8d5b5";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+
+        const pngUrl = canvas.toDataURL("image/png");
+        triggerDownload(pngUrl, `${baseFilename}.png`);
+
+        showToast("PNG & JSON backup downloaded!");
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        showToast("JSON downloaded, but PNG export failed.");
+      };
+      img.src = url;
+    });
+
+    // Initialize Map & Toolbar on Page Load
+    window.addEventListener("DOMContentLoaded", () => {
+      renderPalette();
+      buildMap();
+    });
+  </script>
+</body>
+</html>
