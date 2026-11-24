@@ -103,7 +103,7 @@
   <div id="clear-modal" class="fixed inset-0 bg-[#120e0a]/80 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
     <div class="bg-[#261e17] border border-[#4a3b2c] rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4">
       <h2 class="text-base font-bold text-[#f5ebd6]">Reset Entire Map?</h2>
-      <p class="text-xs text-[#c7b396] leading-relaxed">This will clear all marked territory colors from both the 13×13 sandstone resource tiles and the 12×12 dynasty building tiles.</p>
+      <p class="text-xs text-[#c7b396] leading-relaxed">This will clear all marked tiles.</p>
       <div class="flex items-center justify-end gap-2">
         <button id="cancel-clear" class="px-3 py-1.5 text-xs font-medium bg-[#3b2f23] hover:bg-[#4a3b2c] text-[#f5ebd6] rounded-lg transition">Cancel</button>
         <button id="confirm-clear" class="px-3 py-1.5 text-xs font-medium bg-[#991b1b] hover:bg-[#b91c1c] text-[#fdf6e7] rounded-lg transition">Yes, Clear All</button>
@@ -859,7 +859,7 @@
 
     // Export High-Res PNG Image + JSON Backup using unified name+timestamp format
     document.getElementById("btn-export-png").addEventListener("click", () => {
-      const baseFilename = `season2-desert-dynasty-map_${getFormattedTimestamp()}`;
+      const baseFilename = `map_${getFormattedTimestamp()}`;
 
       // 1. Download JSON state file
       const jsonString = getMapStateJsonString();
